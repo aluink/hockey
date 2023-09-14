@@ -1,26 +1,27 @@
-import fs from 'fs';
+import { promises as fsAsync } from 'fs';
 import { XMLParser } from 'fast-xml-parser';
 import fetch from 'node-fetch';
 import prompts from 'prompts';
 
-const REGEX_EXCLUDE = /Youth/;
+const REGEX_EXCLUDE = /.*:.*at.*/;
 
 async function run() {
-  const response = await prompts({
+  const { url } = await prompts({
     type: 'text',
     name: 'url',
     message: 'Enter the RSS URL:'
   });
-  const outResponse = await prompts({
+  const { outfile } = await prompts({
     type: 'text',
     name: 'outfile',
     initial: 'output.csv',
-    message: 'Choose and output file:'
+    message: 'Choose an output file:'
   })
-  const data = await fetch(response.url)
+  const data = await fetch(url.trim())
   const text = await data.text();
 
-  const xml = new XMLParser().parse(text).rss.channel.item.filter(x => !x.title.match(REGEX_EXCLUDE))
+  const xml = new XMLParser().parse(text).rss.channel.item
+    .filter(x => x.title.match(REGEX_EXCLUDE))
     .sort((a,b) => new Date(a.pubDate) - new Date(b.pubDate))
     .map(x => ({
       home: x.title.split(":")[1].split(" at ")[1].trim(),
@@ -30,9 +31,10 @@ async function run() {
     .map(x => `${new Date(x.pubDate).toLocaleDateString('en-US')}, ${new Date(x.pubDate).toLocaleTimeString('en-US')}, ${x.home}, ${x.away}`)
     .join('\n');
 
-  fs.writeFileSync(outResponse.outfile, xml);
-  console.log(`Wrote to ${outResponse.outfile}`);
+  await fsAsync.writeFile(outfile.trim(), xml);
+  console.log(`Wrote to ${outfile.trim()}`);
   process.exit(0);
 }
 
-run();
+run().catch(e => console.dir(e));
+
